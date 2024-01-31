@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-# Import necessary modules
 import sys, re
 from argparse import ArgumentParser
 
@@ -24,10 +23,10 @@ args.seq = args.seq.upper()
 # Check if the sequence contains only valid characters (ACGTU)
 if re.search('^[ACGTU]+$', args.seq):
     # Check if 'T' is present in the sequence, indicating DNA
-    if re.search('T', args.seq):
+    if 'T' in args.seq:
         print('The sequence is DNA')
     # Check if 'U' is present in the sequence, indicating RNA
-    elif re.search('U', args.seq):
+    elif 'U' in args.seq:
         print('The sequence is RNA')
     # If neither 'T' nor 'U' is present, it can be DNA or RNA
     else:
