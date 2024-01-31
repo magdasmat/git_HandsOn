@@ -57,7 +57,7 @@ if re.search('^[ACGTU]+$', args.seq):
     # If neither 'T' nor 'U' is present, it can be DNA or RNA
     else:
         print('The sequence can be DNA or RNA')
-    
+
     # Calculate and print nucleotide percentages
     result = calculate_nucleotide_percentage(args.seq)
     print("\nNucleotide percentages:")
