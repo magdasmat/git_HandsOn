@@ -56,4 +56,21 @@ done > regulatory_elements/sigmoid_colon_regulatoryElements.genes.distances.tsv
 
 Task 7: Calculate mean and median distances using R
 
+# R script
+
+# Read data
+stomach_data <- read.table("regulatory_elements/stomach_regulatoryElements.genes.distances.tsv", header = FALSE, sep = "\t")
+sigmoid_colon_data <- read.table("regulatory_elements/sigmoid_colon_regulatoryElements.genes.distances.tsv", header = FALSE, sep = "\t")
+
+# Calculate mean and median
+stomach_mean <- mean(stomach_data$V3)
+stomach_median <- median(stomach_data$V3)
+
+sigmoid_colon_mean <- mean(sigmoid_colon_data$V3)
+sigmoid_colon_median <- median(sigmoid_colon_data$V3)
+
+# Display results
+cat("Stomach - Mean:", stomach_mean, "Median:", stomach_median, "\n")
+cat("Sigmoid Colon - Mean:", sigmoid_colon_mean, "Median:", sigmoid_colon_median, "\n")
+
 
