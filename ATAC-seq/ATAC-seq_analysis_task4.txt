@@ -1,0 +1,95 @@
+ATAC-seq Analysis
+
+- Move to folder ATAC-seq, and create folders to store bigBed data files and peaks analyses files. Make sure the files are organized in a consistent way as done for ChIP-seq.
+
+
+1. Create necessary folders
+
+mkdir -p ATAC-seq/analysis ATAC-seq/data/bigBed.files ATAC-seq/data/bed.files ATAC-seq/annotation ATAC-seq/analyses/peaks.analysis
+
+2. Retrieve metadata and bigBed files
+
+# download metadata
+../bin/download.metadata.sh "https://www.encodeproject.org/metadata/?replicates.library.biosample.donor.uuid=d370683e-81e7-473f-8475-7716d027849b&status=released&status=submitted&status=in+progress&biosample_ontology.term_name=stomach&biosample_ontology.term_name=sigmoid+colon&assay_title=ATAC-seq&type=Experiment"
+
+# download bigBed files
+grep -F "bigBed_narrowPeak" ATACmetadata.tsv |\
+grep -F "pseudoreplicated_peaks" |\
+grep -F "GRCh38" |\
+awk 'BEGIN{FS=OFS="\t"}{print $1, $11, $23}' |\
+sort -k2,2 -k1,1r |\
+sort -k2,2 -u > analyses/bigBed.peaks.ids.txt
+
+cut -f1 analyses/bigBed.peaks.ids.txt |\
+while read filename; do
+  wget -P data/bigBed.files "https://www.encodeproject.org/files/$filename/@@download/$filename.bigBed"
+done
+
+# check md5
+for file_type in bigBed; do
+  ../bin/selectRows.sh <(cut -f1 analyses/"$file_type".*.ids.txt) ATACmetadata.tsv | cut -f1,46 > data/"$file_type".files/md5sum.txt
+
+  cat data/"$file_type".files/md5sum.txt |\
+  while read filename original_md5sum; do 
+    md5sum data/"$file_type".files/"$filename"."$file_type" |\
+    awk -v filename="$filename" -v original_md5sum="$original_md5sum" 'BEGIN{FS=" "; OFS="\t"}{print filename, original_md5sum, $1}' 
+  done > tmp 
+  mv tmp data/"$file_type".files/md5sum.txt
+
+  awk '$2!=$3' data/"$file_type".files/md5sum.txt
+done
+
+3. Download gene assembly
+
+mkdir annotation
+wget -P annotation "https://www.encodeproject.org/files/gencode.v24.primary_assembly.annotation/@@download/gencode.v24.primary_assembly.annotation.gtf.gz"
+gunzip annotation/gencode.v24.primary_assembly.annotation.gtf.gz
+
+awk '$3=="gene"' annotation/gencode.v24.primary_assembly.annotation.gtf |\
+cut -d ";" -f1 |\
+awk 'BEGIN{OFS="\t"}{print $1, $4, $5, $10, 0, $7, $10}' |\
+sed 's/\"//g' |\
+awk 'BEGIN{FS=OFS="\t"}$1!="chrM"{$2=($2-1); print $0}' > annotation/gencode.v24.gene.body.bed
+
+4. Retrieve bed files from bigBed files
+
+mkdir data/bed.files
+
+cut -f1 analyses/bigBed.peaks.ids.txt |\
+while read filename; do
+  bigBedToBed data/bigBed.files/"$filename".bigBed data/bed.files/"$filename".bed
+done
+
+5. Intersection analysis
+
+mkdir analyses/peaks.analysis
+
+cut -f-2 analyses/bigBed.peaks.ids.txt |\
+while read filename tissue; do 
+  bedtools intersect -a annotation/gencode.v24.protein.coding.non.redundant.TSS.bed -b data/bed.files/"$filename".bed -wb |\
+  sort -u > analyses/peaks.analysis/ATAC.peaks."$tissue".txt
+done
+
+wc -l analyses/peaks.analysis/ATAC.peaks.stomach.txt
+wc -l analyses/peaks.analysis/ATAC.peaks.sigmoid_colon.txt
+
+6. Peaks outside gene coordinates
+
+awk '$3=="gene"' annotation/gencode.v24.primary_assembly.annotation.gtf |\
+cut -d ";" -f1 |\
+awk 'BEGIN{OFS="\t"}{print $1, $4, $5, $10, 0, $7, $10}' |\
+sed 's/\"//g' |\
+awk 'BEGIN{FS=OFS="\t"}$1!="chrM"{$2=($2-1); print $0}' > annotation/gencode.v24.gene.body.bed
+
+cut -f-2 analyses/bigBed.peaks.ids.txt |\
+while read filename tissue; do 
+  bedtools intersect -a annotation/gencode.v24.gene.body.bed -b data/bed.files/"$filename".bed -v -wb |\
+  sort -u > analyses/peaks.analysis/peaks.outside.gene."$tissue".txt
+done
+
+wc -l analyses/peaks.analysis/peaks.outside.gene.stomach.txt
+wc -l analyses/peaks.analysis/peaks.outside.gene.sigmoid_colon.txt
+
+
+
+
