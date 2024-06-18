@@ -1,0 +1,59 @@
+Task 1: Create a folder regulatory_elements
+
+mkdir -p epigenomics_uvic/regulatory_elements
+
+Task 2: Select distal regulatory regions
+Assuming you have BED files for H3K27ac and H3K4me1 peaks, use bedtools to find intersections with ATAC-seq regions.
+
+# Assuming H3K27ac and H3K4me1 peak files are in `data/H3K27ac.bed` and `data/H3K4me1.bed`
+
+# Intersection with ATAC-seq and H3K27ac
+bedtools intersect -a data/bed.files/ATAC_peaks_stomach.bed -b data/H3K27ac_stomach.bed > regulatory_elements/stomach_ATAC_H3K27ac.bed
+bedtools intersect -a data/bed.files/ATAC_peaks_sigmoid_colon.bed -b data/H3K27ac_sigmoid_colon.bed > regulatory_elements/sigmoid_colon_ATAC_H3K27ac.bed
+
+# Intersection with ATAC-seq and H3K4me1
+bedtools intersect -a data/bed.files/ATAC_peaks_stomach.bed -b data/H3K4me1_stomach.bed > regulatory_elements/stomach_ATAC_H3K4me1.bed
+bedtools intersect -a data/bed.files/ATAC_peaks_sigmoid_colon.bed -b data/H3K4me1_sigmoid_colon.bed > regulatory_elements/sigmoid_colon_ATAC_H3K4me1.bed
+
+# Intersection of the above intersections to find distal regulatory elements
+bedtools intersect -a regulatory_elements/stomach_ATAC_H3K27ac.bed -b regulatory_elements/stomach_ATAC_H3K4me1.bed > regulatory_elements/stomach_distal_regulatory_elements.bed
+bedtools intersect -a regulatory_elements/sigmoid_colon_ATAC_H3K27ac.bed -b regulatory_elements/sigmoid_colon_ATAC_H3K4me1.bed > regulatory_elements/sigmoid_colon_distal_regulatory_elements.bed
+
+# Counting the number of distal regulatory elements
+wc -l regulatory_elements/stomach_distal_regulatory_elements.bed
+wc -l regulatory_elements/sigmoid_colon_distal_regulatory_elements.bed
+
+Task 3: Filter regulatory regions on chromosome 1
+
+# Filtering distal regulatory regions on chromosome 1 and generating regulatory.elements.starts.tsv file
+awk '$1 == "chr1"' regulatory_elements/stomach_distal_regulatory_elements.bed | cut -f 1,2,4 > regulatory_elements/stomach_regulatory.elements.starts.tsv
+awk '$1 == "chr1"' regulatory_elements/sigmoid_colon_distal_regulatory_elements.bed | cut -f 1,2,4 > regulatory_elements/sigmoid_colon_regulatory.elements.starts.tsv
+
+
+Task 4: Prepare the gene.starts.tsv file
+
+awk 'BEGIN{FS=OFS="\t"}{if ($6=="+"){start=$2} else {start=$3}; print $4, start}' annotation/gencode.v24.gene.body.bed > annotation/gencode.v24.gene.starts.tsv
+
+Task 5: Download the Python script and verify its functionality
+
+# Download the get.distance.py script and place it in epigenomics_uvic/bin
+
+# Verify the script functionality
+python ../bin/get.distance.py --input annotation/gencode.v24.gene.starts.tsv --start 980000
+
+Task 6: Retrieve closest gene and distance for each regulatory element
+
+# Assuming the get.distance.py script is correctly located and functioning
+
+cat regulatory_elements/stomach_regulatory.elements.starts.tsv | while read element start; do 
+   python ../bin/get.distance.py --input annotation/gencode.v24.gene.starts.tsv --start $start
+done > regulatory_elements/stomach_regulatoryElements.genes.distances.tsv
+
+cat regulatory_elements/sigmoid_colon_regulatory.elements.starts.tsv | while read element start; do 
+   python ../bin/get.distance.py --input annotation/gencode.v24.gene.starts.tsv --start $start
+done > regulatory_elements/sigmoid_colon_regulatoryElements.genes.distances.tsv
+
+
+Task 7: Calculate mean and median distances using R
+
+
