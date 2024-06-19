@@ -1,0 +1,258 @@
+1) Move to folder ATAC-seq, and create folders to store bigBed data files and peaks analyses files. Make sure the files are organized in a consistent way as done for ChIP-seq.
+
+Step 1: To make sure i'm in the correct folder: 
+
+cd ~/epigenomics_uvic/ATAC-seq
+
+Step 2: create necessary directories
+
+mkdir -p ATAC-seq/analysis ATAC-seq/data/bigBed.files ATAC-seq/data/bed.files ATAC-seq/annotation ATAC-seq/analyses/peaks.analysis
+
+Step 3: verify the structure of the directories:
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq$ ls -R
+.:
+analyses  cmnd.txt  data
+
+./analyses:
+peaks.analysis
+
+./analyses/peaks.analysis:
+
+./data:
+bigBed.files
+
+./data/bigBed.files:
+
+2) Retrieve from a newly generated metadata file ATAC-seq peaks (bigBed narrow, pseudoreplicated peaks, assembly GRCh38) for stomach and sigmoid_colon for the same donor used in the previous sections. Hint: have a look at what we did here. Make sure your md5sum values coincide with the ones provided by ENCODE.
+
+Step 1: Filter the Metadata File
+First, we need to filter the ATACmetadata.tsv file to retrieve only the ATAC-seq peaks that match the criteria: bigBed narrow, pseudoreplicated peaks, assembly GRCh38 for the tissues stomach and sigmoid_colon.
+
+We are going to navigate through ENCODE portal to search for the donor ENCDO451RUA and filter the data to match the criteria (bigBed narrow, pseudoreplicated peaks, assembly GRCh38 for the tissues stomach and sigmoid_colon), then we are going to download the files in a file.txt. The URL of the metadata file is provided on the first line of the files.txt:
+
+These are the filters taken:
+
+- Assay type: DNA_accessibility (2)
+- Assay title: ATAC-seq (2)
+- Hide control experiments: no
+- Biosample
+	- organism: HOMO SAPIENS (2)
+	- biosample: sigmoid colon (1) and stomach (1)
+
+These are the results (2) after filtering out 347 results:
+
+ATAC-seq in stomach
+Homo sapiens stomach tissue male adult (54 years)
+Lab: Michael Snyder, Stanford
+Project: ENCODE
+Reference Epigenome: ENCSR135MTK
+
+ATAC-seq in sigmoid colon
+Homo sapiens sigmoid colon tissue male adult (54 years)
+Lab: Michael Snyder, Stanford
+Project: ENCODE
+Reference Epigenome: ENCSR517BJQ
+
+I will download in a file called files.txt to obtain the link to download the metadata file in a file called ATACmetadata.tsv:
+
+"https://www.encodeproject.org/metadata/?replicates.library.biosample.donor.uuid=d370683e-81e7-473f-8475-7716d027849b&status=released&status=submitted&status=in+progress&assay_title=ATAC-seq&replicates.library.biosample.donor.organism.scientific_name=Homo+sapiens&biosample_ontology.classification=tissue&biosample_ontology.term_name=sigmoid+colon&biosample_ontology.term_name=stomach&type=Experiment"
+
+# Download the metadata file
+wget -O ATACmetadata.tsv "https://www.encodeproject.org/metadata/?replicates.library.biosample.donor.uuid=d370683e-81e7-473f-8475-7716d027849b&status=released&status=submitted&status=in+progress&assay_title=ATAC-seq&replicates.library.biosample.donor.organism.scientific_name=Homo+sapiens&biosample_ontology.classification=tissue&biosample_ontology.term_name=sigmoid+colon&biosample_ontology.term_name=stomach&type=Experiment"
+
+THIS ARE THE COLNAMES
+
+File accession  File format     File type       File format type        Output type     File assembly   Experiment accession    Assay   Donor(s)Biosample term id       Biosample term name     Biosample type  Biosample organism      Biosample treatments    Biosample treatments amount    Biosample treatments duration    Biosample genetic modifications methods Biosample genetic modifications categories      Biosample genetic modifications targets Biosample genetic modifications gene targets    Biosample genetic modifications site coordinates        Biosample genetic modifications zygosity        Experiment target       Library made from       Library depleted in     Library extraction method       Library lysis method    Library crosslinking method     Library strand specific Experiment date released        Project RBNS protein concentration      Library fragmentation method    Library size range      Biological replicate(s) Technical replicate(s)  Read length     Mapped read length      Run typePaired end      Paired with     Index of        Derived from    Size    Lab     md5sum  dbxrefs File download URL       Genome annotation      Platform Controlled by   File Status     s3_uri  Azure URL       File analysis title     File analysis status    Audit WARNING   Audit NOT_COMPLIANT     Audit ERROR
+
+Step 2: Download and Verify bigBed Files
+
+# Filter out metadata (ATAC-metadata.tsv) to obtain bigBed files:
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq$ grep -F "ATAC-seq" ATACmetadata.tsv | \
+grep -F "bigBed" | \
+grep -F "narrowPeak" | \
+grep -F "pseudoreplicated" | \
+grep -F "GRCh38" | \
+awk 'BEGIN{FS=OFS="\t"}{print $1, $11}' | \
+sort -k2,2 -k1,1r | \
+sort -k2,2 -u > analyses/bigBed.peaks.ids.txt
+
+# let's check the content of the file: 
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq$ cd analyses/
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq/analyses$ ls
+bigBed.peaks.ids.txt  peaks.analysis
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq/analyses$ head bigBed.peaks.ids.txt
+ENCFF287UHP     sigmoid colon
+ENCFF762IFP     stomach
+
+Now, let's download the bigBed peaks files:
+
+# first, make sure I'm in the correct directory:
+
+cd ~/epigenomics_uvic/ATAC-seq
+
+cut -f1 analyses/bigBed.peaks.ids.txt | \
+while read filename; do
+  wget -P data/bigBed.files "https://www.encodeproject.org/files/$filename/@@download/$filename.bigBed"
+done
+
+This loop will read each filename from bigBed.peaks.ids.txt and use wget to download the corresponding bigBed files
+
+ENCFF762IFP.bigBed                  100%[===================================================================>]   6.09M  71.5KB/s    in 55s
+
+2024-06-19 10:42:26 (114 KB/s) - ‘data/bigBed.files/ENCFF762IFP.bigBed’ saved [6390157/6390157]
+
+Check md5 files:
+
+ #!/bin/bash
+
+for file_type in bigBed; do
+  # Retrieve original MD5 hashes from the metadata
+  ../bin/selectRows.sh <(cut -f1 analyses/"$file_type".*.ids.txt) ATACmetadata.tsv | cut -f1,46 > data/"$file_type".files/md5sum.txt
+
+  # Compute MD5 hashes on the downloaded files and compare with original hashes
+  while read -r filename original_md5sum; do
+    computed_md5sum=$(md5sum data/"$file_type".files/"$filename"."$file_type" | awk '{print $1}')
+    echo -e "${filename}\t${original_md5sum}\t${computed_md5sum}"
+  done < data/"$file_type".files/md5sum.txt > tmp
+
+  # Overwrite the original md5sum file with the new one containing computed hashes
+  mv tmp data/"$file_type".files/md5sum.txt
+
+  # Check for any mismatches between original and computed MD5 hashes
+  awk '$2 != $3' data/"$file_type".files/md5sum.txt
+
+done
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq$ cd data/
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq/data$ ls
+bigBed.files
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq/data$ cd bigBed.files/
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq/data/bigBed.files$ ls
+ENCFF287UHP.bigBed  ENCFF762IFP.bigBed  md5sum.txt
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq/data/bigBed.files$ head -2 md5sum.txt # to show only the first 2 lines
+ENCFF762IFP     f6a97407b6ba4697108e74451fb3eaf4        f6a97407b6ba4697108e74451fb3eaf4
+ENCFF287UHP     46f2ae76779da5be7de09b63d5c2ceb9        46f2ae76779da5be7de09b63d5c2ceb9
+
+3) For each tissue, run an intersection analysis using BEDTools: report 1) the number of peaks that intersect promoter regions, 2) the number of peaks that fall outside gene coordinates (whole gene body, not just the promoter regions). 
+
+	1) number of peaks that intersect promoter regions
+
+Change directory: 
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq$ cd analyses/
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq/analyses$ ls
+bigBed.peaks.ids.txt  peaks.analysis
+
+Download gene assembly:
+
+wget -P annotation "https://www.encodeproject.org/files/gencode.v24.primary_assembly.annotation/@@download/gencode.v24.primary_assembly.annotation.gtf.gz"
+
+gencode.v24.primary_assembly.annota 100%[===================================================================>]  36.93M   270KB/s    in 5m 15s
+
+2024-06-19 11:00:26 (120 KB/s) - ‘annotation/gencode.v24.primary_assembly.annotation.gtf.gz’ saved [38723767/38723767]
+
+gunzip annotation/gencode.v24.primary_assembly.annotation.gtf.gz
+
+
+Get the number of peaks:
+
+awk '$3=="gene"' annotation/gencode.v24.primary_assembly.annotation.gtf |\
+cut -d ";" -f1 |\
+awk 'BEGIN{OFS="\t"}{print $1, $4, $5, $10, 0, $7, $10}' |\
+sed 's/\"//g' |\
+awk 'BEGIN{FS=OFS="\t"}$1!="chrM"{$2=($2-1); print $0}' > annotation/gencode.v24.gene.body.bed
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq/analyses/annotation$ ls
+gencode.v24.gene.body.bed  gencode.v24.primary_assembly.annotation.gtf
+
+
+Retrieve the bed files from the bigBed files:
+
+# create directory:
+mkdir -p ~/epigenomics_uvic/ATAC-seq/data/bed.files
+
+# proceed:
+# Convert bigBed to bed Format: Now, we'll use bigBedToBed to convert each bigBed file referenced in bigBed.peaks.ids.txt to bed format and store them in ~/epigenomics_uvic/ATAC-seq/data/bed.files/.
+
+cut -f1 analyses/bigBed.peaks.ids.txt |\
+while read filename; do
+  bigBedToBed data/bigBed.files/"$filename".bigBed data/bed.files/"$filename".bed
+done
+
+
+Now, intersect ATAC peaks with TSS:
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq/analyses$ ls
+annotation  bigBed.peaks.ids.txt  peaks.analysis
+
+cut -f-2 analyses/bigBed.peaks.ids.txt |\
+while read filename tissue; do 
+  bedtools intersect -a annotation/gencode.v24.protein.coding.non.redundant.TSS.bed -b data/bed.files/"$filename".bed -wb |\
+  sort -u > analyses/peaks.analysis/ATAC.peaks."$tissue".txt
+done
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq/analyses/peaks.analysis$ ls
+ATAC.peaks.sigmoidcolon.txt  ATAC.peaks.stomach.txt
+
+# obtain the number of peaks
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq$ wc -l analyses/peaks.analysis/ATAC.peaks.stomach.txt
+99380 analyses/peaks.analysis/ATAC.peaks.stomach.txt
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq$ wc -l analyses/peaks.analysis/ATAC.peaks.sigmoidcolon.txt
+107242 analyses/peaks.analysis/ATAC.peaks.sigmoidcolon.txt
+
+	2) the number of peaks that fall outside gene coordinates (whole gene body, not just the promoter regions).
+
+Generate Gene Body BED File:
+
+# Extracting gene body coordinates from the GTF file and creating a BED file (annotation/gencode.v24.gene.body.bed) that represents the entire gene body.
+
+cd ~/epigenomics_uvic/ATAC-seq/analyses/
+
+awk '$3=="gene"' ../annotation/gencode.v24.primary_assembly.annotation.gtf |\
+cut -d ";" -f1 |\
+awk 'BEGIN{OFS="\t"}{print $1, $4, $5, $10, 0, $7, $10}' |\
+sed 's/\"//g' |\
+awk 'BEGIN{FS=OFS="\t"}$1!="chrM"{$2=($2-1); print $0}' > gencode.v24.gene.body.bed
+
+# Verify the File Creation:
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq/analyses/annotation$ ls gencode.v24.gene.body.bed
+gencode.v24.gene.body.bed
+
+# in the same folder (cd ~/epigenomics_uvic/ATAC-seq/analyses/)
+
+cut -f-2 bigBed.peaks.ids.txt |\
+while read filename tissue; do
+  bedtools intersect -a annotation/gencode.v24.gene.body.bed -b ../data/bed.files/"$filename".bed -v -wb |\
+  sort -u > peaks.analysis/peaks.outside.gene."$tissue".txt
+done
+
+# Verify Output:
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq/analyses/peaks.analysis$ ls
+ATAC.peaks.sigmoidcolon.txt  ATAC.peaks.stomach.txt  peaks.outside.gene.sigmoidcolon.txt  peaks.outside.gene.stomach.txt
+
+# now create peaks output files
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq$ 
+bedtools intersect -a data/bed.files/ENCFF762IFP.bed -b analyses/annotation/gencode.v24.gene.body.bed -v | sort -u > analyses/peaks.analysis/peaks.outside.gene.stomach.txt
+
+bedtools intersect -a data/bed.files/ENCFF287UHP.bed -b analyses/annotation/gencode.v24.gene.body.bed -v | sort -u > analyses/peaks.analysis/peaks.outside.gene.sigmoidcolon.txt
+
+# check files
+
+mmatitos@Magdalena:~/epigenomics_uvic/ATAC-seq/analyses/peaks.analysis$ ls
+ATAC.peaks.sigmoidcolon.txt  ATAC.peaks.stomach.txt  peaks.outside.gene.sigmoidcolon.txt  peaks.outside.gene.stomach.txt
+
+# check number of peaks
+
+wc -l analyses/peaks.analysis/peaks.outside.gene.stomach.txt
+25489 analyses/peaks.analysis/peaks.outside.gene.stomach.txt
+
+wc -l analyses/peaks.analysis/peaks.outside.gene.sigmoidcolon.txt
+27089 analyses/peaks.analysis/peaks.outside.gene.sigmoidcolon.txt
