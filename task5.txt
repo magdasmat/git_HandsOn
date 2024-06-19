@@ -1,0 +1,311 @@
+TASK 5
+
+Task 1: Create a folder regulatory_elements inside epigenomics_uvic. This will be the folder where you store all your subsequent results.
+
+cd ~/epigenomics_uvic
+mkdir regulatory_elements
+
+# Check folder:
+
+mmatitos@Magdalena:~/epigenomics_uvic$ mkdir regulatory_elements
+mmatitos@Magdalena:~/epigenomics_uvic$ ls
+ATAC-seq  ATAC-seq_task4.txt  ChIP-seq  bin  docker  handsOn_images  install.dependecies.txt  regulatory_elements  test
+
+mkdir regulatory_elements/analyses
+mkdir -p regulatory_elements/analyses/peaks.analysis
+mkdir -p regulatory_elements/analyses/annotation
+
+# Prepare data
+
+cp /home/mmatitos/epigenomics_uvic/ATAC-seq/analyses/peaks.analysis/peaks.outside.gene.sigmoidcolon.txt /home/mmatitos/epigenomics_uvic/regulatory_elements
+cp /home/mmatitos/epigenomics_uvic/ATAC-seq/analyses/peaks.analysis/peaks.outside.gene.stomach.txt /home/mmatitos/epigenomics_uvic/regulatory_elements
+
+mmatitos@Magdalena:~/epigenomics_uvic/regulatory_elements$ ls
+analyses  peaks.outside.gene.sigmoidcolon.txt  peaks.outside.gene.stomach.txt
+
+Task 2: Distal regulatory regions are usually found to be flanked by both H3K27ac and H3K4me1. From your starting catalogue of open regions in each tissue, 
+select those that overlap peaks of H3K27ac AND H3K4me1 in the corresponding tissue. 
+You will get a list of candidate distal regulatory elements for each tissue. How many are they?
+
+Step 1: Prepare H3K27ac and H3K4me1 Peak Files
+
+select files from ATACmetadata: /home/mmatitos/epigenomics_uvic/ATAC-seq/ATACmetadata.tsv -> not there, I have to specify metadata to download for H3K27ac and H3K4me1 in specific tissues.
+
+path: cd ~/epigenomics_uvic/regulatory_elements
+
+wget -O metadata.tsv "https://www.encodeproject.org/metadata/?replicates.library.biosample.donor.uuid=d370683e-81e7-473f-8475-7716d027849b&status=released&status=submitted&status=in+progress&biosample_ontology.term_name=stomach&biosample_ontology.term_name=sigmoid+colon&assay_slims=DNA+binding&target.label=H3K4me1&target.label=H3K27ac&type=Experiment"
+
+grep -F "H3K27ac" /home/mmatitos/epigenomics_uvic/regulatory_elements/metadata.tsv |\
+grep -F "bigBed" |\
+grep -F "narrowPeak" |\
+grep -F "pseudoreplicated" |\
+grep -F "GRCh38" |\
+awk 'BEGIN{FS=OFS="\t"}{print $1, $11, $23}' |\
+sort -k2,2 -k1,1r |\
+sort -k2,2 -u > /home/mmatitos/epigenomics_uvic/regulatory_elements/analyses/bigBed.peaks.ids.H3K27ac.txt
+
+
+grep -F "H3K4me1" /home/mmatitos/epigenomics_uvic/regulatory_elements/metadata.tsv |\
+grep -F "bigBed" |\
+grep -F "narrowPeak" |\
+grep -F "pseudoreplicated" |\
+grep -F "GRCh38" |\
+awk 'BEGIN{FS=OFS="\t"}{print $1, $11, $23}' |\
+sort -k2,2 -k1,1r |\
+sort -k2,2 -u > /home/mmatitos/epigenomics_uvic/regulatory_elements/analyses/bigBed.peaks.ids.H3K4me1.txt
+
+
+# check that all files has been created
+
+mmatitos@Magdalena:~/epigenomics_uvic$ head -2 ./regulatory_elements/analyses/bigBed.peaks.ids.H3K27ac.txt
+ENCFF872UHN     sigmoid colon   H3K27ac-human
+ENCFF977LBD     stomach H3K27ac-human
+
+mmatitos@Magdalena:~/epigenomics_uvic$ head -2 ./regulatory_elements/analyses/bigBed.peaks.ids.H3K4me1.txt
+ENCFF724ZOF     sigmoid colon   H3K4me1-human
+ENCFF844XRN     stomach H3K4me1-human
+
+Download bigBed files for H3K4me1 and H3K27ac peaks using wget:
+
+# Download H3K4me1 BigBed files
+cut -f1 ./regulatory_elements/analyses/bigBed.peaks.ids.H3K4me1.txt | while read filename; do
+  wget -P /home/mmatitos/epigenomics_uvic/regulatory_elements/data/bigBed.files "https://www.encodeproject.org/files/$filename/@@download/$filename.bigBed"
+done
+
+ENCFF844XRN.bigBed                  100%[===================================================================>]   3.22M   132KB/s    in 31s
+
+2024-06-19 15:18:49 (107 KB/s) - ‘/home/mmatitos/epigenomics_uvic/regulatory_elements/data/bigBed.files/ENCFF844XRN.bigBed’ saved [3381950/3381950]
+
+
+# Download H3K27ac BigBed files
+cut -f1 ./regulatory_elements/analyses/bigBed.peaks.ids.H3K27ac.txt | while read filename; do
+  wget -P /home/mmatitos/epigenomics_uvic/regulatory_elements/data/bigBed.files "https://www.encodeproject.org/files/$filename/@@download/$filename.bigBed"
+done
+
+ENCFF977LBD.bigBed                  100%[===================================================================>]   2.84M   176KB/s    in 24s
+
+2024-06-19 15:21:31 (122 KB/s) - ‘/home/mmatitos/epigenomics_uvic/regulatory_elements/data/bigBed.files/ENCFF977LBD.bigBed’ saved [2978365/2978365]
+
+# check if they are in the correct folder:
+
+mmatitos@Magdalena:~/epigenomics_uvic$ ls /home/mmatitos/epigenomics_uvic/regulatory_elements/data/bigBed.files/
+ENCFF724ZOF.bigBed  ENCFF844XRN.bigBed  ENCFF872UHN.bigBed  ENCFF977LBD.bigBed
+
+# correct
+
+Convert BigBed Files to Bed Files (bigBedToBed):
+
+# Convert H3K4me1 BigBed files to Bed format
+cut -f1 regulatory_elements/analyses/bigBed.peaks.ids.H3K4me1.txt | while read filename; do
+  bigBedToBed regulatory_elements/data/bigBed.files/"$filename".bigBed regulatory_elements/data/bed.files/"$filename".bed
+done
+
+mmatitos@Magdalena:~/epigenomics_uvic$ ls regulatory_elements/data/bed.files
+ENCFF724ZOF.bed  ENCFF844XRN.bed
+
+# Convert H3K27ac BigBed files to Bed format
+cut -f1 regulatory_elements/analyses/bigBed.peaks.ids.H3K27ac.txt | while read filename; do
+  bigBedToBed regulatory_elements/data/bigBed.files/"$filename".bigBed regulatory_elements/data/bed.files/"$filename".bed
+done
+
+mmatitos@Magdalena:~/epigenomics_uvic$ ls regulatory_elements/data/bed.files
+ENCFF724ZOF.bed  ENCFF844XRN.bed  ENCFF872UHN.bed  ENCFF977LBD.bed
+
+Retrieve Gene Coordinates from Genome Annotation
+
+# Extract gene coordinates from the genome annotation file (gencode.v24.primary_assembly.annotation.gtf) and convert it to Bed format:
+
+cut -d ";" -f1 ATAC-seq/analyses/annotation/gencode.v24.primary_assembly.annotation.gtf | \
+awk 'BEGIN{OFS="\t"}{print $1, $4, $5, $10, 0, $7}' | \
+sed 's/\"//g' > regulatory_elements/analyses/annotation/gencode.v24.bed
+
+# check that file has been created:
+
+mmatitos@Magdalena:~/epigenomics_uvic$ find . -name "gencode.v24.bed"
+./regulatory_elements/analyses/annotation/gencode.v24.bed
+
+Step 2: Perform Intersection Analysis for Distal Regulatory Elements
+
+mkdir -p regulatory_elements/analyses/peaks.analysis
+
+# for sigmoid colon peaks outside of gene:
+
+## H3K4me1 (ENCFF724ZOF.bed)
+
+bedtools intersect -a regulatory_elements/data/bed.files/ENCFF724ZOF.bed -b regulatory_elements/analyses/annotation/gencode.v24.bed -v | \
+sort -u > regulatory_elements/analyses/peaks.analysis/H3K4me1.sigmoid_colon.txt
+
+bedtools intersect -a ./regulatory_elements/peaks.outside.gene.sigmoidcolon.txt -b regulatory_elements/analyses/peaks.analysis/H3K4me1.sigmoid_colon.txt -u|\
+sort -u > regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K4me1.sigmoid_colon.txt
+
+## H3K27ac (ENCFF872UHN.bed)
+
+bedtools intersect -a regulatory_elements/data/bed.files/ENCFF872UHN.bed -b regulatory_elements/analyses/annotation/gencode.v24.bed -v |\
+sort -u > regulatory_elements/analyses/peaks.analysis/H3K27ac.sigmoid_colon.txt
+
+bedtools intersect -a ./regulatory_elements/peaks.outside.gene.sigmoidcolon.txt -b regulatory_elements/analyses/peaks.analysis/H3K27ac.sigmoid_colon.txt -u|\
+sort -u > regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K27ac.sigmoid_colon.txt
+
+# for stomach peaks outside of gene: 
+
+## H3K4me1 (ENCFF844XRN.bed)
+
+bedtools intersect -a regulatory_elements/data/bed.files/ENCFF844XRN.bed -b regulatory_elements/analyses/annotation/gencode.v24.bed -v |\
+sort -u > regulatory_elements/analyses/peaks.analysis/H3K4me1.stomach.txt
+
+bedtools intersect -a regulatory_elements/peaks.outside.gene.stomach.txt -b regulatory_elements/analyses/peaks.analysis/H3K4me1.stomach.txt -u|\
+sort -u > regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K4me1.stomach.txt
+
+## H3K27ac (ENCFF977LBD.bed)
+
+bedtools intersect -a regulatory_elements/data/bed.files/ENCFF977LBD.bed -b regulatory_elements/analyses/annotation/gencode.v24.bed -v |\
+sort -u > regulatory_elements/analyses/peaks.analysis/H3K27ac.stomach.txt
+
+bedtools intersect -a regulatory_elements/peaks.outside.gene.stomach.txt -b regulatory_elements/analyses/peaks.analysis/H3K27ac.stomach.txt -u|\
+sort -u > regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K27ac.stomach.txt
+
+
+Step 3: count peaks
+
+wc -l regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K27ac.sigmoid_colon.txt
+wc -l regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K4me1.sigmoid_colon.txt
+wc -l regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K4me1.stomach.txt
+wc -l regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K27ac.stomach.txt
+
+11063 regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K27ac.sigmoid_colon.txt
+12826 regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K4me1.sigmoid_colon.txt
+7077 regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K4me1.stomach.txt
+9305 regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K27ac.stomach.txt
+
+Task 3: Focus on regulatory elements that are located on chromosome 1 (hint: to parse a file based on the value of a specific column, have a look at what we did here), and generate a file regulatory.elements.starts.tsv that contains the name of the regulatory region (i.e. the name of the original ATAC-seq peak) and the start (5') coordinate of the region.
+
+# Filter for chromosome 1 and extract required fields from each file
+grep "^chr1\s" regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K27ac.sigmoid_colon.txt | cut -f4,2 > temp1.tsv
+grep "^chr1\s" regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K27ac.stomach.txt | cut -f4,2 > temp2.tsv
+grep "^chr1\s" regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K4me1.stomach.txt | cut -f4,2 > temp3.tsv
+grep "^chr1\s" regulatory_elements/analyses/peaks.analysis/ATAC-seq.H3K4me1.sigmoid_colon.txt | cut -f4,2 > temp4.tsv
+
+# Combine the results and remove duplicates
+cat temp1.tsv temp2.tsv temp3.tsv temp4.tsv | sort -u > regulatory_elements/regulatory.elements.starts.tsv
+
+# Clean up temporary files
+rm temp1.tsv temp2.tsv temp3.tsv temp4.tsv
+
+# to check:
+
+mmatitos@Magdalena:~/epigenomics_uvic$ head -2 regulatory_elements/regulatory.elements.starts.tsv
+100530857       Peak_20485
+100658596       Peak_150853
+
+Task 4: Focus on protein-coding genes located on chromosome 1. From the BED file of gene body coordinates that you generated here, prepare a tab-separated file called gene.starts.tsv which will store the name of the gene in the first column, and the start coordinate of the gene on the second column (REMEMBER: for genes located on the minus strand, the start coordinate will be at the 3'). 
+
+Filter for chromosome 1: The grep "^chr1\s" command filters lines that start with chr1 in the gencode.v24.bed file.
+Determine gene start coordinate: The awk command checks the strand ($6). For genes on the positive strand ($6=="+"), the start coordinate is $2. For genes on the negative strand ($6=="-"), the start coordinate is $3.
+Output format: The output format is tab-separated, with the gene name ($4) in the first column and the start coordinate in the second column.
+
+grep "^chr1\s" ./regulatory_elements/analyses/annotation/gencode.v24.bed | awk 'BEGIN{FS=OFS="\t"}{if ($6=="+"){start=$2} else {start=$3}; print $4, start}' > regulatory_elements/analyses/gene.starts.tsv
+
+# to check:
+
+mmatitos@Magdalena:~/epigenomics_uvic$ head -2 regulatory_elements/analyses/gene.starts.tsv
+ENSG00000223972.5       11869
+ENSG00000223972.5       11869
+
+Task 5: Download or copy this python script inside the epigenomics_uvic/bin folder. Have a look at the help page of this script to understand how it works:
+python ../bin/get.distance.py -h
+
+mmatitos@Magdalena:~/epigenomics_uvic$ cd bin/
+mmatitos@Magdalena:~/epigenomics_uvic/bin$ nano get.distance.py
+
+Copy the following script:
+#######################################################################################################################
+#!/usr/bin/env python3
+
+#************
+# LIBRARIES *
+#************
+
+import sys
+from optparse import OptionParser
+
+#*****************
+# OPTION PARSING *
+#*****************
+
+parser = OptionParser()
+parser.add_option("-i", "--input", dest="input", help="Input file containing gene names and start positions")
+parser.add_option("-s", "--start", dest="start", type="int", help="Start position of the enhancer")
+options, args = parser.parse_args()
+
+if not options.input or not options.start:
+    parser.error("Both input file and enhancer start position must be specified")
+
+open_input = open(options.input)
+enhancer_start = int(options.start)
+
+#********
+# BEGIN *
+#********
+
+x = 1000000  # set maximum distance to 1 Mb
+selectedGene = ""  # initialize the gene as empty
+selectedGeneStart = 0  # initialize the start coordinate of the gene as empty
+
+for line in open_input.readlines():  # for each line in the input file
+    gene, y = line.strip().split('\t')  # split the line into two columns based on a tab
+    position = int(y)  # define a variable called position that corresponds to the integer of the start of the gene
+    distance = abs(position - enhancer_start)  # compute the absolute value of the difference between position and enhancer_start
+
+    if distance < x:  # if this absolute value is lower than x
+        x = distance  # this value will now be your current x
+        selectedGene = gene  # save gene as selectedGene
+        selectedGeneStart = position  # save position as selectedGeneStart
+
+print("\t".join([selectedGene, str(selectedGeneStart), str(x)]))  # Print the results
+
+###################################################################################################################################
+
+mmatitos@Magdalena:~/epigenomics_uvic/bin$ python ../bin/get.distance.py -h
+Usage: get.distance.py [options]
+
+Options:
+  -h, --help            show this help message and exit
+  -i INPUT, --input=INPUT
+                        Input file containing gene names and start positions
+  -s START, --start=START
+                        Start position of the enhancer
+
+# Check if script works correctly:
+
+python3 /home/mmatitos/epigenomics_uvic/bin/get.distance.py --input /home/mmatitos/epigenomics_uvic/regulatory_elements/analyses/gene.starts.tsv --start 980000
+
+ENSG00000187642.9       980657  657
+
+ENSG00000187642.9	982093 2093 # the one to check with is the same gene but the other values are different 
+
+Task 6. For each regulatory element contained in the file regulatory.elements.starts.tsv, retrieve the closest gene and the distance to the closest gene using the python script you created above. Use the command below as a starting point:
+
+awk -F '\t' -v OFS='\t' -v a=2 -v b=1 '{
+    t  = $a
+    $a = $b
+    $b = t
+    print 
+}' ./regulatory_elements/regulatory.elements.starts.tsv > ./regulatory_elements/regulatory.elements.starts2.tsv
+
+cat ./regulatory_elements/regulatory.elements.starts2.tsv | while read element start; do 
+   python3 /home/mmatitos/epigenomics_uvic/bin/get.distance.py --input /home/mmatitos/epigenomics_uvic/regulatory_elements/analyses/gene.starts.tsv --start $start
+done > /home/mmatitos/epigenomics_uvic/regulatory_elements/regulatoryElements.genes.distances.tsv
+
+Task 7: Use R to compute the mean and the median of the distances stored in regulatoryElements.genes.distances.tsv.
+
+# R script
+
+# Read data
+data <- read.table("regulatory_elements/regulatoryElements.genes.distances.tsv", header = FALSE, sep = "\t")
+
+# Calculate mean and median
+data_mean  <- mean(data$V3) # 19276.2
+data_median <- median(data$V3) # 10194
+
+# Display results
+cat("Mean:",data_mean, "Median:", data_median, "\n")
